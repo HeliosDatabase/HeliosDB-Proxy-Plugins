@@ -1,0 +1,13 @@
+[package]
+name        = "helios-plugin-column-mask"
+version     = { workspace = true }
+edition     = { workspace = true }
+license     = { workspace = true }
+description = "Per-role column-level masking via PreQuery rewrite"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+serde      = { workspace = true }
+serde_json = { workspace = true }

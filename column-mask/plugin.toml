@@ -1,0 +1,9 @@
+name        = "helios-plugin-column-mask"
+version     = "0.1.0"
+description = "Per-role column-level masking via PreQuery rewrite"
+author      = "HeliosProxy contributors"
+license     = "AGPL-3.0-only"
+hooks       = ["pre_query"]
+permissions = []
+min_memory  = 1048576
+max_memory  = 16777216

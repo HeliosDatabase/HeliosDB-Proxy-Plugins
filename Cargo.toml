@@ -1,0 +1,34 @@
+[workspace]
+resolver = "2"
+members = [
+    "ai-classifier",
+    "audit-chain",
+    "column-mask",
+    "cost-governor",
+    "llm-guardrail",
+    "pgvector-router",
+    "residency-router",
+    "token-budget",
+]
+
+[workspace.package]
+version    = "0.1.0"
+edition    = "2021"
+license    = "AGPL-3.0-only"
+repository = "https://github.com/dimensigon/heliosdb-proxy-plugins"
+rust-version = "1.75"
+
+[workspace.dependencies]
+# Plugins are compiled to wasm32-unknown-unknown — the proxy hosts them
+# via wasmtime. We keep dependencies thin to minimise .wasm size, but
+# default to std features for ergonomic use of HashMap and friends.
+# Plugins that need a true no_std build can override.
+serde      = { version = "1", features = ["derive"] }
+serde_json = { version = "1" }
+
+[profile.release]
+opt-level     = "z"          # size-optimised wasm
+lto           = true
+codegen-units = 1
+panic         = "abort"
+strip         = true

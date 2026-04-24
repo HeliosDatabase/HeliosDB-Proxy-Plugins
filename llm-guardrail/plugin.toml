@@ -1,0 +1,10 @@
+name        = "helios-plugin-llm-guardrail"
+version     = "0.1.0"
+description = "Reject dangerous LLM-sourced SQL (DROP, missing tenant filter, unbounded SELECT)"
+author      = "HeliosProxy contributors"
+license     = "AGPL-3.0-only"
+hooks       = ["pre_query"]
+permissions = []
+min_memory  = 1048576
+max_memory  = 16777216
+priority    = 40

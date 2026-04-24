@@ -1,0 +1,9 @@
+name        = "helios-plugin-cost-governor"
+version     = "0.1.0"
+description = "Per-tenant query cost budgets with auto-kill on overrun"
+author      = "HeliosProxy contributors"
+license     = "AGPL-3.0-only"
+hooks       = ["pre_query", "post_query"]
+permissions = ["kv_read", "kv_write", "metric_inc"]
+min_memory  = 1048576
+max_memory  = 16777216
