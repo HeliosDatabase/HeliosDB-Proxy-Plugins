@@ -1,0 +1,9 @@
+name        = "helios-plugin-residency-router"
+version     = "0.1.0"
+description = "Per-user data-residency routing — extracts region from JWT, blocks cross-region reads"
+author      = "HeliosProxy contributors"
+license     = "AGPL-3.0-only"
+hooks       = ["route"]
+permissions = []
+min_memory  = 1048576
+max_memory  = 16777216

@@ -1,0 +1,9 @@
+name        = "helios-plugin-audit-chain"
+version     = "0.1.0"
+description = "Hash-chained tamper-evident audit log; compatible with RFC-3161 timestamping"
+author      = "HeliosProxy contributors"
+license     = "AGPL-3.0-only"
+hooks       = ["post_query"]
+permissions = ["http_post", "kv_read", "kv_write"]
+min_memory  = 1048576
+max_memory  = 16777216

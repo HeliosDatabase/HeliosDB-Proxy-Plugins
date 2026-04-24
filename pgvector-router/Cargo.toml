@@ -1,0 +1,13 @@
+[package]
+name        = "helios-plugin-pgvector-router"
+version     = { workspace = true }
+edition     = { workspace = true }
+license     = { workspace = true }
+description = "Detect pgvector similarity queries and route to vector-specialised replicas"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+serde      = { workspace = true }
+serde_json = { workspace = true }

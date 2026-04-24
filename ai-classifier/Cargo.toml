@@ -1,0 +1,13 @@
+[package]
+name        = "helios-plugin-ai-classifier"
+version     = { workspace = true }
+edition     = { workspace = true }
+license     = { workspace = true }
+description = "Detect LLM-generated SQL and tag the QueryContext.attributes with ai_traffic=true"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+serde      = { workspace = true }
+serde_json = { workspace = true }
