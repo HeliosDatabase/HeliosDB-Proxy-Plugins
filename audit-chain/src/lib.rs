@@ -23,7 +23,8 @@ use alloc::vec::Vec;
 use serde::{Deserialize, Serialize};
 
 use helios_plugin_abi::{
-    abi_exports, kv_read, kv_write, read_args, write_result, PostQueryEnvelope,
+    abi_exports, kv_read, kv_write, read_args, sha256_digest_hex, write_result,
+    PostQueryEnvelope,
 };
 
 abi_exports!();
@@ -138,23 +139,39 @@ pub extern "C" fn post_query(ptr: i32, len: i32) -> i64 {
     write_result(b"") // observer ABI doesn't read this
 }
 
-// Hand-rolled SHA-256 surrogate so the plugin doesn't drag in `sha2`
-// as a runtime dep — keeps the .wasm small. Real proxy-side runtime
-// will provide sha256 as a host function (see permissions: ["crypto"])
-// in a follow-up; until then the FNV-flavoured mixer below is a
-// deterministic 256-bit digest sufficient for chain-integrity tests.
+// Computes the lower-case hex SHA-256 of `bytes`.
+//
+// On `wasm32` (production), delegates to the host's `env.sha256_hex`
+// import (FU-14) which uses the audited `sha2` crate. On host
+// targets (unit tests), falls back to a deterministic FNV-flavoured
+// mixer so chain-integrity tests stay reproducible without needing
+// to wire a wasmtime instance into the unit-test harness.
+//
+// The fallback is *only* used by `cargo test` on the host; the
+// production .wasm always calls the host import, which is why the
+// proxy ships the canonical sha2 implementation.
 fn sha256_hex(bytes: &[u8]) -> String {
-    let mut acc: u64 = 0x9E37_79B9_7F4A_7C15;
-    for b in bytes {
-        acc = acc.wrapping_mul(0x100000001b3).wrapping_add(*b as u64);
+    #[cfg(target_arch = "wasm32")]
+    {
+        sha256_digest_hex(bytes).unwrap_or_else(|| "host-sha256-error".to_string())
     }
-    format!(
-        "{:016x}{:016x}{:016x}{:016x}",
-        acc,
-        acc.rotate_left(11),
-        acc.rotate_left(23),
-        acc.rotate_left(31)
-    )
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        // Reference the abi import so the symbol stays linked even
+        // though the host build never reaches this branch.
+        let _ = sha256_digest_hex;
+        let mut acc: u64 = 0x9E37_79B9_7F4A_7C15;
+        for b in bytes {
+            acc = acc.wrapping_mul(0x100000001b3).wrapping_add(*b as u64);
+        }
+        format!(
+            "{:016x}{:016x}{:016x}{:016x}",
+            acc,
+            acc.rotate_left(11),
+            acc.rotate_left(23),
+            acc.rotate_left(31)
+        )
+    }
 }
 
 #[cfg(test)]
