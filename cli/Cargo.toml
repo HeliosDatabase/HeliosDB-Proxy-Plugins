@@ -1,0 +1,25 @@
+[package]
+name        = "helios-plugin"
+version     = { workspace = true }
+edition     = { workspace = true }
+license     = { workspace = true }
+description = "CLI to pack / inspect / verify HeliosProxy WASM plugins as portable OCI-style artefacts"
+
+[[bin]]
+name = "helios-plugin"
+path = "src/main.rs"
+
+[dependencies]
+# Plain dependencies (host binary — not size-constrained).
+serde         = { workspace = true }
+serde_json    = { workspace = true }
+clap          = { version = "4", features = ["derive"] }
+tar           = "0.4"
+flate2        = "1"
+sha2          = "0.10"
+ed25519-dalek = { version = "2", default-features = false, features = ["alloc", "fast"] }
+base64        = "0.22"
+anyhow        = "1"
+
+[dev-dependencies]
+tempfile = { workspace = true }
