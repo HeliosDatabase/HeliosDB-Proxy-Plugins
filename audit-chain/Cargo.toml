@@ -9,5 +9,6 @@ description = "Hash-chained tamper-evident audit log; compatible with RFC-3161 t
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-serde      = { workspace = true }
-serde_json = { workspace = true }
+serde             = { workspace = true }
+serde_json        = { workspace = true }
+helios-plugin-abi = { workspace = true }
