@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "abi",
     "ai-classifier",
     "audit-chain",
     "column-mask",
@@ -25,6 +26,10 @@ rust-version = "1.75"
 # Plugins that need a true no_std build can override.
 serde      = { version = "1", features = ["derive"] }
 serde_json = { version = "1" }
+
+# Shared ABI: alloc/dealloc + i64 packing + mirror types for the proxy's
+# QueryContext / PreQueryResult / PostQueryOutcome serde shapes.
+helios-plugin-abi = { path = "abi", version = "0.1.0" }
 
 [profile.release]
 opt-level     = "z"          # size-optimised wasm

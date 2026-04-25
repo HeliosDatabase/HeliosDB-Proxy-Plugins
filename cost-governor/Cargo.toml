@@ -9,5 +9,6 @@ description = "Per-tenant query cost budgets with auto-kill on overrun"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-serde      = { workspace = true }
-serde_json = { workspace = true }
+serde             = { workspace = true }
+serde_json        = { workspace = true }
+helios-plugin-abi = { workspace = true }
