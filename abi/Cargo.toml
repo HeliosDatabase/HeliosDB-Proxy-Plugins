@@ -1,0 +1,13 @@
+[package]
+name        = "helios-plugin-abi"
+version     = { workspace = true }
+edition     = { workspace = true }
+license     = { workspace = true }
+description = "Shared ABI helpers for HeliosProxy WASM plugins (alloc, dealloc, i64 packing, mirror types)"
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+serde      = { workspace = true }
+serde_json = { workspace = true }
