@@ -9,5 +9,6 @@ description = "Per-role column-level masking via PreQuery rewrite"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-serde      = { workspace = true }
-serde_json = { workspace = true }
+serde             = { workspace = true }
+serde_json        = { workspace = true }
+helios-plugin-abi = { workspace = true }

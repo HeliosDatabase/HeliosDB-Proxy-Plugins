@@ -9,5 +9,6 @@ description = "Per-user data-residency routing — extracts region from JWT, blo
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-serde      = { workspace = true }
-serde_json = { workspace = true }
+serde             = { workspace = true }
+serde_json        = { workspace = true }
+helios-plugin-abi = { workspace = true }
