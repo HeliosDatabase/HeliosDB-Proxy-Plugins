@@ -4,6 +4,20 @@ members = [
     "abi",
     "ai-classifier",
     "audit-chain",
+    "cli",
+    "column-mask",
+    "cost-governor",
+    "llm-guardrail",
+    "pgvector-router",
+    "residency-router",
+    "token-budget",
+]
+# `cli/` is a host binary (not a wasm plugin) — exclude from the
+# default workspace `cargo build --target wasm32-...` runs.
+default-members = [
+    "abi",
+    "ai-classifier",
+    "audit-chain",
     "column-mask",
     "cost-governor",
     "llm-guardrail",
@@ -26,6 +40,10 @@ rust-version = "1.75"
 # Plugins that need a true no_std build can override.
 serde      = { version = "1", features = ["derive"] }
 serde_json = { version = "1" }
+
+# Test-only: tempdirs for the CLI integration tests so signature +
+# artefact scaffolding stays scoped.
+tempfile = "3"
 
 # Shared ABI: alloc/dealloc + i64 packing + mirror types for the proxy's
 # QueryContext / PreQueryResult / PostQueryOutcome serde shapes.
