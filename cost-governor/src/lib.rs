@@ -1,20 +1,27 @@
 //! Cost-governor plugin.
 //!
-//! Tracks per-tenant query cost via a sliding window. Until the proxy
-//! exposes its KV namespace as a wasmtime import, the proxy is the
-//! source of truth for state: it injects the current per-tenant
-//! `usage` and `budget` into `QueryContext.hook_context.attributes`
-//! before each call, and writes back the updated usage from the
-//! plugin's response.
+//! Tracks per-tenant query cost via a sliding window stored in the
+//! host's KV namespace (bridged from the proxy via wasmtime imports
+//! in `Proxy/src/plugins/host_imports.rs`).
 //!
-//! Attribute keys (proxy ⇄ plugin contract):
+//! KV layout (per-plugin namespace `helios-plugin-cost-governor`):
 //!
-//! | key                       | direction | value                            |
-//! |---------------------------|-----------|----------------------------------|
-//! | `tenant_id`               | proxy → plugin | tenant identifier           |
-//! | `tenant_usage`            | proxy → plugin | JSON of `TenantUsage`       |
-//! | `tenant_budget`           | proxy → plugin | JSON of `TenantBudget`      |
-//! | `cost_estimate`           | plugin → proxy (post hook only) | f64 string |
+//! - `tenant:<id>:usage`  → JSON of [`TenantUsage`]
+//! - `tenant:<id>:budget` → JSON of [`TenantBudget`]
+//!
+//! Usage flow per query:
+//!
+//! 1. `pre_query` reads `usage` + `budget` for the tenant; if the
+//!    daily/hourly/minute window is exhausted, returns
+//!    [`PreQueryResult::Block`].
+//! 2. `post_query` estimates the query's cost from
+//!    `(rows_estimate × α + wall_time_ms × β)` and writes the updated
+//!    `usage` back via `kv_write`.
+//!
+//! Budgets are seeded by the proxy admin layer (out-of-band): the
+//! operator's `TenantQuota` CRD reconciler writes the per-tenant
+//! `tenant:<id>:budget` into the plugin's KV namespace before any
+//! traffic for that tenant arrives.
 //!
 //! Cost model:
 //!
@@ -28,10 +35,12 @@ extern crate alloc;
 
 use alloc::format;
 use alloc::string::{String, ToString};
+use alloc::vec::Vec;
 use serde::{Deserialize, Serialize};
 
 use helios_plugin_abi::{
-    abi_exports, read_args, write_result, PostQueryEnvelope, PreQueryResult, QueryContext,
+    abi_exports, kv_read, kv_write, read_args, write_result, PostQueryEnvelope,
+    PreQueryResult, QueryContext,
 };
 
 abi_exports!();
@@ -94,22 +103,34 @@ pub fn estimate_cost(rows_scanned: u64, wall_time_ms: u64) -> f64 {
     rows_scanned as f64 * ALPHA_PER_ROW + wall_time_ms as f64 * BETA_PER_MS
 }
 
-/// Decide whether to allow a query based on the proxy-injected
-/// `tenant_usage` / `tenant_budget` attributes. Missing attributes
-/// are treated as "no budget configured" → Allow (the proxy will
-/// not call us for tenants that didn't opt in).
-fn decide_pre_query(ctx: &QueryContext) -> PreQueryResult {
-    let attrs = &ctx.hook_context.attributes;
+fn tenant_id_from(ctx: &QueryContext) -> Option<&str> {
+    ctx.hook_context.attributes.get("tenant_id").map(|s| s.as_str())
+}
 
-    let usage = attrs
-        .get("tenant_usage")
-        .and_then(|s| serde_json::from_str::<TenantUsage>(s).ok())
-        .unwrap_or_default();
-    let budget = attrs
-        .get("tenant_budget")
-        .and_then(|s| serde_json::from_str::<TenantBudget>(s).ok())
-        .unwrap_or_default();
+fn key_usage(tenant: &str) -> Vec<u8> {
+    format!("tenant:{}:usage", tenant).into_bytes()
+}
 
+fn key_budget(tenant: &str) -> Vec<u8> {
+    format!("tenant:{}:budget", tenant).into_bytes()
+}
+
+/// Decide whether to allow a query based on the tenant's KV-stored
+/// usage + budget. Missing usage ⇒ zero. Missing budget ⇒ Allow
+/// (tenant didn't opt in to cost governance).
+pub fn decide_pre_query(ctx: &QueryContext) -> PreQueryResult {
+    let Some(tenant) = tenant_id_from(ctx) else {
+        return PreQueryResult::Continue;
+    };
+    let usage: TenantUsage = kv_read(&key_usage(tenant))
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or_default();
+    let budget: TenantBudget = match kv_read(&key_budget(tenant))
+        .and_then(|b| serde_json::from_slice(&b).ok())
+    {
+        Some(b) => b,
+        None => return PreQueryResult::Continue,
+    };
     match check_budget(&usage, &budget) {
         BudgetDecision::Allow => PreQueryResult::Continue,
         BudgetDecision::Block { reason, retry_after_secs } => PreQueryResult::Block {
@@ -118,23 +139,37 @@ fn decide_pre_query(ctx: &QueryContext) -> PreQueryResult {
     }
 }
 
-/// Write the post-query observation back to a small JSON payload the
-/// proxy can use to update tenant usage. Keeps the cost calc
-/// host-checkable.
-fn observe_post_query(env: &PostQueryEnvelope) -> CostObservation {
-    let rows_estimate = (env.outcome.response_bytes / 64).max(0); // crude: 64-byte avg row
+/// Compute the query's cost from the post-query envelope, add it to
+/// the tenant's running window, persist, and return a small
+/// observation the proxy can ship to metrics.
+pub fn observe_post_query(env: &PostQueryEnvelope) -> CostObservation {
+    let rows_estimate = env.outcome.response_bytes / 64; // ~64 b/row heuristic
+    let cost = estimate_cost(rows_estimate, env.outcome.elapsed_us / 1000);
+
+    if let Some(tenant) = tenant_id_from(&env.query_context) {
+        let mut usage: TenantUsage = kv_read(&key_usage(tenant))
+            .and_then(|b| serde_json::from_slice(&b).ok())
+            .unwrap_or_default();
+        usage.minute += cost;
+        usage.hour += cost;
+        usage.day += cost;
+        if let Ok(bytes) = serde_json::to_vec(&usage) {
+            kv_write(&key_usage(tenant), &bytes);
+        }
+    }
+
     CostObservation {
-        cost: estimate_cost(rows_estimate, env.outcome.elapsed_us / 1000),
+        cost,
         success: env.outcome.success,
         target_node: env.outcome.target_node.clone(),
     }
 }
 
 #[derive(Debug, Serialize)]
-struct CostObservation {
-    cost: f64,
-    success: bool,
-    target_node: Option<String>,
+pub struct CostObservation {
+    pub cost: f64,
+    pub success: bool,
+    pub target_node: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -177,23 +212,8 @@ pub extern "C" fn post_query(ptr: i32, len: i32) -> i64 {
 mod tests {
     use super::*;
 
-    fn make_ctx(usage: &str, budget: &str) -> QueryContext {
-        let mut ctx = QueryContext::default();
-        ctx.query = "SELECT 1".to_string();
-        ctx.hook_context
-            .attributes
-            .insert("tenant_id".into(), "t1".into());
-        ctx.hook_context
-            .attributes
-            .insert("tenant_usage".into(), usage.to_string());
-        ctx.hook_context
-            .attributes
-            .insert("tenant_budget".into(), budget.to_string());
-        ctx
-    }
-
     #[test]
-    fn allows_when_no_budget_configured() {
+    fn allows_when_no_tenant_id() {
         let ctx = QueryContext::default();
         match decide_pre_query(&ctx) {
             PreQueryResult::Continue => {}
@@ -202,41 +222,51 @@ mod tests {
     }
 
     #[test]
-    fn allows_under_budget() {
-        let ctx = make_ctx(
-            r#"{"minute":0.5,"hour":1.0,"day":5.0}"#,
-            r#"{"minute":1.0,"hour":10.0,"day":100.0}"#,
-        );
-        assert!(matches!(decide_pre_query(&ctx), PreQueryResult::Continue));
-    }
-
-    #[test]
-    fn blocks_on_minute_budget() {
-        let ctx = make_ctx(
-            r#"{"minute":1.5,"hour":1.5,"day":5.0}"#,
-            r#"{"minute":1.0,"hour":10.0,"day":100.0}"#,
-        );
+    fn allows_when_no_budget_seeded() {
+        // tenant_id present, but kv_read returns None (host stub).
+        let mut ctx = QueryContext::default();
+        ctx.hook_context
+            .attributes
+            .insert("tenant_id".into(), "t1".into());
         match decide_pre_query(&ctx) {
-            PreQueryResult::Block { reason } => {
-                assert!(reason.contains("minute"), "got {}", reason);
-                assert!(reason.contains("retry in 60s"));
-            }
-            other => panic!("expected Block, got {:?}", other),
+            PreQueryResult::Continue => {}
+            other => panic!("expected Continue (missing budget ⇒ allow), got {:?}", other),
         }
     }
 
     #[test]
-    fn blocks_on_day_overrides_minute() {
-        let ctx = make_ctx(
-            r#"{"minute":0.0,"hour":0.0,"day":200.0}"#,
-            r#"{"minute":1.0,"hour":10.0,"day":100.0}"#,
-        );
-        match decide_pre_query(&ctx) {
-            PreQueryResult::Block { reason } => {
-                assert!(reason.contains("daily"));
-                assert!(reason.contains("retry in 86400s"));
+    fn check_budget_allows_under_threshold() {
+        let u = TenantUsage { minute: 0.5, hour: 1.0, day: 5.0 };
+        let b = TenantBudget { minute: 1.0, hour: 10.0, day: 100.0 };
+        match check_budget(&u, &b) {
+            BudgetDecision::Allow => {}
+            BudgetDecision::Block { reason, .. } => panic!("unexpected Block: {}", reason),
+        }
+    }
+
+    #[test]
+    fn check_budget_blocks_minute() {
+        let u = TenantUsage { minute: 1.5, hour: 1.5, day: 5.0 };
+        let b = TenantBudget { minute: 1.0, hour: 10.0, day: 100.0 };
+        match check_budget(&u, &b) {
+            BudgetDecision::Block { retry_after_secs, reason } => {
+                assert_eq!(retry_after_secs, 60);
+                assert!(reason.contains("minute"));
             }
-            other => panic!("expected Block, got {:?}", other),
+            BudgetDecision::Allow => panic!("expected minute Block, got Allow"),
+        }
+    }
+
+    #[test]
+    fn check_budget_day_takes_precedence_over_minute() {
+        let u = TenantUsage { minute: 0.0, hour: 0.0, day: 200.0 };
+        let b = TenantBudget { minute: 1.0, hour: 10.0, day: 100.0 };
+        match check_budget(&u, &b) {
+            BudgetDecision::Block { retry_after_secs, reason } => {
+                assert_eq!(retry_after_secs, 86_400);
+                assert!(reason.contains("daily"));
+            }
+            BudgetDecision::Allow => panic!("expected daily Block"),
         }
     }
 
@@ -247,7 +277,7 @@ mod tests {
     }
 
     #[test]
-    fn observe_estimates_from_response_size_and_elapsed() {
+    fn observe_returns_estimated_cost_from_envelope() {
         let env = PostQueryEnvelope {
             query_context: QueryContext::default(),
             outcome: helios_plugin_abi::PostQueryOutcome {
@@ -263,5 +293,11 @@ mod tests {
         assert!((obs.cost - 2.001).abs() < 1e-3);
         assert!(obs.success);
         assert_eq!(obs.target_node.as_deref(), Some("primary"));
+    }
+
+    #[test]
+    fn key_format_is_namespaced_per_tenant() {
+        assert_eq!(key_usage("acme"), b"tenant:acme:usage");
+        assert_eq!(key_budget("acme"), b"tenant:acme:budget");
     }
 }

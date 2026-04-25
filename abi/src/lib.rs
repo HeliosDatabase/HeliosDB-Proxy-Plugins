@@ -179,6 +179,84 @@ extern "C" {
 }
 
 // ---------------------------------------------------------------------------
+// KV namespace — wasmtime imports bridged by the host.
+// ---------------------------------------------------------------------------
+
+/// Maximum value size `kv_get` will materialise in one call. Plugins
+/// that need larger payloads should chunk the key.
+const KV_GET_MAX: i32 = 8 * 1024;
+
+#[cfg(target_arch = "wasm32")]
+#[link(wasm_import_module = "env")]
+extern "C" {
+    fn kv_get(key_ptr: i32, key_len: i32, val_out_ptr: i32, val_max_len: i32) -> i32;
+    fn kv_set(key_ptr: i32, key_len: i32, val_ptr: i32, val_len: i32) -> i32;
+    fn kv_delete(key_ptr: i32, key_len: i32) -> i32;
+}
+
+/// Read a value from the host KV namespace. Returns `None` if the
+/// key is absent or larger than `KV_GET_MAX`.
+pub fn kv_read(key: &[u8]) -> Option<Vec<u8>> {
+    #[cfg(target_arch = "wasm32")]
+    {
+        let mut buf = vec![0u8; KV_GET_MAX as usize];
+        let written = unsafe {
+            kv_get(
+                key.as_ptr() as i32,
+                key.len() as i32,
+                buf.as_mut_ptr() as i32,
+                KV_GET_MAX,
+            )
+        };
+        if written < 0 {
+            return None;
+        }
+        buf.truncate(written as usize);
+        Some(buf)
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let _ = key;
+        // Host-side stub: tests must inject expectations through other
+        // means (e.g. by calling the unit-test helpers directly).
+        None
+    }
+}
+
+/// Write a value into the host KV namespace.
+pub fn kv_write(key: &[u8], value: &[u8]) {
+    #[cfg(target_arch = "wasm32")]
+    {
+        unsafe {
+            let _ = kv_set(
+                key.as_ptr() as i32,
+                key.len() as i32,
+                value.as_ptr() as i32,
+                value.len() as i32,
+            );
+        }
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let _ = (key, value);
+    }
+}
+
+/// Delete a key. Idempotent — succeeds whether the key existed or not.
+pub fn kv_remove(key: &[u8]) {
+    #[cfg(target_arch = "wasm32")]
+    {
+        unsafe {
+            let _ = kv_delete(key.as_ptr() as i32, key.len() as i32);
+        }
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let _ = key;
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Macro: emits the bump allocator + alloc/dealloc exports
 // ---------------------------------------------------------------------------
 
