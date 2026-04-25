@@ -9,5 +9,6 @@ description = "Detect LLM-generated SQL and tag the QueryContext.attributes with
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-serde      = { workspace = true }
-serde_json = { workspace = true }
+serde             = { workspace = true }
+serde_json        = { workspace = true }
+helios-plugin-abi = { workspace = true }
