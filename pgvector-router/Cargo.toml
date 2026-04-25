@@ -9,5 +9,6 @@ description = "Detect pgvector similarity queries and route to vector-specialise
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-serde      = { workspace = true }
-serde_json = { workspace = true }
+serde             = { workspace = true }
+serde_json        = { workspace = true }
+helios-plugin-abi = { workspace = true }

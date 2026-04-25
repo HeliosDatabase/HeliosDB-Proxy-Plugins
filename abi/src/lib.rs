@@ -114,6 +114,34 @@ pub struct PostQueryEnvelope {
     pub outcome: PostQueryOutcome,
 }
 
+/// Mirror of `plugins::RouteResult`.
+///
+/// Wire form (matches the proxy's runtime.rs deserialiser at
+/// runtime.rs:787-792):
+///
+/// ```json
+/// { "action": "default" }
+/// { "action": "node", "target": "vector-replica-1" }
+/// { "action": "primary" }
+/// { "action": "standby" }
+/// { "action": "branch", "target": "main" }
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "action", rename_all = "lowercase")]
+pub enum RouteResult {
+    Default,
+    Node {
+        #[serde(default)]
+        target: String,
+    },
+    Primary,
+    Standby,
+    Branch {
+        #[serde(default)]
+        target: String,
+    },
+}
+
 // ---------------------------------------------------------------------------
 // Marshalling helpers
 // ---------------------------------------------------------------------------
