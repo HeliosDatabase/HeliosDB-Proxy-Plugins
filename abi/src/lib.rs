@@ -285,6 +285,47 @@ pub fn kv_remove(key: &[u8]) {
 }
 
 // ---------------------------------------------------------------------------
+// Crypto namespace — host-computed SHA-256.
+// ---------------------------------------------------------------------------
+
+#[cfg(target_arch = "wasm32")]
+#[link(wasm_import_module = "env")]
+extern "C" {
+    fn sha256_hex(in_ptr: i32, in_len: i32, out_ptr: i32) -> i32;
+}
+
+/// Compute the lower-case hex SHA-256 digest of `bytes` via the host
+/// import. Returns `None` on a memory error inside the host (very
+/// unlikely — the only failure mode is the host being unable to
+/// write the digest back).
+///
+/// Host-side stub returns `None` so unit tests don't accidentally
+/// exercise a fake hash.
+pub fn sha256_digest_hex(bytes: &[u8]) -> Option<String> {
+    #[cfg(target_arch = "wasm32")]
+    {
+        let mut buf = [0u8; 64];
+        let written = unsafe {
+            sha256_hex(
+                bytes.as_ptr() as i32,
+                bytes.len() as i32,
+                buf.as_mut_ptr() as i32,
+            )
+        };
+        if written != 64 {
+            return None;
+        }
+        // ASCII hex is valid UTF-8 by construction.
+        Some(String::from_utf8(buf.to_vec()).unwrap_or_default())
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let _ = bytes;
+        None
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Macro: emits the bump allocator + alloc/dealloc exports
 // ---------------------------------------------------------------------------
 
