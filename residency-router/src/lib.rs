@@ -98,12 +98,11 @@ pub extern "C" fn route(ptr: i32, len: i32) -> i64 {
 
     let result = match decision {
         ResidencyDecision::Node(name) => RouteResult::Node { target: name },
-        // RouteResult has no native Block — encode as a non-existent
-        // target the proxy will fail to resolve. The host's route
-        // dispatch surfaces this as an error to the client. A future
-        // RouteResult::Block variant in the ABI would be cleaner.
-        ResidencyDecision::Block(_) => RouteResult::Node {
-            target: "__residency_block__".to_string(),
+        // Block surfaces as a PG ErrorResponse on the wire — the proxy
+        // synthesises ErrorResponse + ReadyForQuery from this variant
+        // (see proxy server.rs route_and_forward Block branch).
+        ResidencyDecision::Block(reason) => RouteResult::Block {
+            reason: reason.to_string(),
         },
         ResidencyDecision::NoRequirement => RouteResult::Default,
     };

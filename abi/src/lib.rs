@@ -116,8 +116,7 @@ pub struct PostQueryEnvelope {
 
 /// Mirror of `plugins::RouteResult`.
 ///
-/// Wire form (matches the proxy's runtime.rs deserialiser at
-/// runtime.rs:787-792):
+/// Wire form (matches the proxy's runtime.rs deserialiser):
 ///
 /// ```json
 /// { "action": "default" }
@@ -125,7 +124,12 @@ pub struct PostQueryEnvelope {
 /// { "action": "primary" }
 /// { "action": "standby" }
 /// { "action": "branch", "target": "main" }
+/// { "action": "block", "reason": "cross-region read forbidden" }
 /// ```
+///
+/// `target` is for node identifiers (Node / Branch). `reason` is for
+/// the Block variant — keeping the two fields separate avoids
+/// overloading either.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "action", rename_all = "lowercase")]
 pub enum RouteResult {
@@ -139,6 +143,12 @@ pub enum RouteResult {
     Branch {
         #[serde(default)]
         target: String,
+    },
+    /// Reject the query. The proxy maps this to a PostgreSQL
+    /// ErrorResponse with SQLSTATE 42000 + the supplied reason.
+    Block {
+        #[serde(default)]
+        reason: String,
     },
 }
 
