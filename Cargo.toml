@@ -30,7 +30,7 @@ default-members = [
 version    = "0.1.0"
 edition    = "2021"
 license    = "AGPL-3.0-only"
-repository = "https://github.com/dimensigon/heliosdb-proxy-plugins"
+repository = "https://github.com/dimensigon/HDB-HeliosDB-Proxy-Plugins"
 rust-version = "1.75"
 
 [workspace.dependencies]
