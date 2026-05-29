@@ -1,6 +1,6 @@
 # `heliosdb-proxy-plugins` — first-party WASM plugin registry
 
-Plugins for [HeliosProxy](https://github.com/dimensigon/HDB-HeliosDB-Proxy)
+Plugins for [HeliosProxy](https://github.com/HeliosDatabase/HeliosDB-Proxy)
 shipped as WebAssembly modules. Each plugin is its own crate in this
 workspace; `cargo build --release --target wasm32-unknown-unknown` in
 any sub-directory produces a single `.wasm` artefact the proxy can load.
