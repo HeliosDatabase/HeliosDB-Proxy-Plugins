@@ -50,7 +50,7 @@ enum Cmd {
         description: String,
 
         /// SPDX license identifier.
-        #[arg(long, default_value = "AGPL-3.0-only")]
+        #[arg(long, default_value = "Apache-2.0")]
         license: String,
 
         /// Comma-separated list of hooks the plugin implements.

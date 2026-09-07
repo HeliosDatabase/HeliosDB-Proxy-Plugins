@@ -2,7 +2,7 @@ name        = "helios-plugin-ai-classifier"
 version     = "0.1.0"
 description = "Detect LLM-generated SQL and tag the QueryContext.attributes with ai_traffic=true"
 author      = "HeliosProxy contributors"
-license     = "AGPL-3.0-only"
+license     = "Apache-2.0"
 hooks       = ["pre_query"]
 permissions = []
 min_memory  = 1048576       # 1 MB

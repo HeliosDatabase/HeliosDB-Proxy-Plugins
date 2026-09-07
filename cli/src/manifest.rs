@@ -83,7 +83,7 @@ mod tests {
             name: "helios-plugin-cost-governor".into(),
             version: "0.1.0".into(),
             description: "Per-tenant cost governance".into(),
-            license: "AGPL-3.0-only".into(),
+            license: "Apache-2.0".into(),
             hooks: vec!["pre_query".into(), "post_query".into()],
             wasm_sha256: "deadbeef".repeat(8),
             signature_sha256: None,
